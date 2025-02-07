@@ -2,8 +2,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
 
-  cluster_name = var.cluster_name
-
+  cluster_name    = var.cluster_name
   cluster_version = "1.31"
 
   vpc_id     = module.vpc.vpc_id
@@ -14,24 +13,34 @@ module "eks" {
 
   eks_managed_node_groups = {
     main = {
+      name            = "main-node-group"
+      use_name_prefix = true
+
+      subnet_ids = module.vpc.public_subnets
+
       min_size     = 1
       max_size     = 2
       desired_size = 1
 
       instance_types = ["t3.micro"]
+
+      # Proper bootstrap configuration
+      bootstrap_extra_args = <<-EOT
+        --kubelet-extra-args '--node-labels=node.kubernetes.io/lifecycle=spot'
+      EOT
+
+      # Use the default EKS-optimized AMI
+      ami_type = "AL2_x86_64"
+
+      # Enable public IP
       network_interfaces = [{
         associate_public_ip_address = true
         delete_on_termination       = true
       }]
-      vpc_security_group_ids = [
-        module.eks.cluster_security_group_id
-      ]
-      subnet_type                = "public"
-      enable_bootstrap_user_data = true
-      bootstrap_extra_args       = "--kubelet-extra-args '--node-labels=node.kubernetes.io/lifecycle=spot'"
     }
   }
 
+  # Additional security group rules
   node_security_group_additional_rules = {
     ingress_self_all = {
       description = "Node to node all ports/protocols"
